@@ -1,0 +1,128 @@
+---
+title: "prediction of sucess and failures of academic students"
+author: "Ibeh Amaka"
+date: '2023-06-27'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+This is a data set on how to predict the student success and drop out in an academic year.
+let us load our data
+lets load our pakagaes that we will be needing for this analysis
+```{r}
+library(readr)
+library(dplyr) 
+library(jmv)
+library(caret)
+library(class)
+library(gmodels)
+library(e1071)
+library(C50)
+data <- read_csv("C:/Users/ibeha/OneDrive/Desktop/MY R DATASET/Online datatset/dataset.csv")
+View(data)
+summary(data)
+```
+lets do some data pre-processing, i want to check for missing data in the data set, and check the stucture of our data set
+```{r}
+sum(is.na(data))
+class(data)
+data = data.frame(data)
+class(data)
+str(data)
+```
+I want to run a corrolation analysis  with Target variables as the factor label
+however, this is not possible because the target variabel is a character type.
+i will need to rename the varaible target to 1,2 and 3 then change the data type to numeric.
+thereafter i will run the corrolation and select the varibles that corrolate with target. this will enable me to remove
+some variables that are not necessary for running the macheine learning algorith. the fewer the features the better the prediction.
+let me show some descriptive statistics for few varaibles
+
+```{r}
+descriptives(data, vars = vars(GDP, Target, Course), freq = TRUE)
+data <- data %>%
+  mutate(Target = recode(Target, "Dropout" = 1, "Enrolled" = 2, "Graduate"  =  3 ))
+class(data$Target)
+```
+run the corrolation analysis, and select the corrolated avaribles
+
+```{r}
+data_cor <- cor(data[ , colnames(data) != "Target"],  # Calculate correlations
+                data$Target)
+data_cor
+new_data = data %>% select (2,11, 13, 14, 15, 16, 17, 20, 22, 23, 26, 28,29,34,35)
+head(new_data)
+str(new_data)
+```
+lets see the numbers of predicted dropout, enrolled and graduated in the data set and plot a barchat for it.
+```{r}
+new = table(new_data$Target)
+
+barplot(new,
+        main = "'How many dropouts, enrolled & graduates are there in Target column",
+        xlab ="count",
+        ylab =  "Target",
+        col = "darkred",
+        horiz = F)
+```
+reconvert the data back to the previous form, enable us to use the labels for our ML, and covert to factor
+
+```{r}
+new_data <- new_data %>%
+  mutate(Target = recode(Target,  "1" = "Dropout" ,  "2" = "Enrolled",  "3" = "Graduate" ))
+class(new_data$Target)
+head(new_data$Target,10)
+new_data$Target = as.factor(new_data$Target)
+class(new_data$Target)
+  
+```
+let us run a machine kearning algorithm, i will be using decision tree,  k-nearest neigbour
+nayes bayes. in other to select the best predictor.
+first let us split our data into test and train set using 80% for the train and 20% for the test
+```{r}
+set.seed(123)
+p= 0.8
+train.index = sample.int(nrow(new_data),nrow(new_data)*p)
+str(train.index)
+summary(train.index)
+data.train = new_data[train.index,] #get the 80% of the data
+str(data.train)
+data.test = new_data[-train.index,]  ## minus the train data will give us the test data which will give you 20% of the data
+str(data.test)  
+``` 
+lets run a k-nearest neighbor. i will use k as 60 which is the square root of my train data set..72%accuracy
+```{r}
+set.seed(12345)
+pred_test = knn(data.train[,-15], data.test[,-15],data.train$Target, k=60)
+pred_test
+confusion = table(pred_test,data.test$Target)
+confusion
+confusionMatrix(pred_test,data.test$Target)
+
+CrossTable(x = data.test$Target, y = pred_test,
+           prop.chisq=FALSE)
+
+```
+lets run a  naive Bayes algorithm..result shows 96% accuracy
+
+```{r}
+nayes_classifier <- naiveBayes(data.train,
+data.train$Target)
+nayes_classifier
+nayes_pred <- predict(nayes_classifier, data.test)
+CrossTable(x = data.test$Target, y = nayes_pred,
+           prop.chisq=FALSE)
+confusionMatrix(nayes_pred,data.test$Target)
+```
+lets run a decision tree. result shows 75% accuracy
+```{r}
+decision_tree <- C5.0(data.train[-15],
+data.train$Target)
+summary(decision_tree)
+decision.tree_pred <- predict(decision_tree,data.test)
+CrossTable(x = data.test$Target, y = decision.tree_pred,
+           prop.chisq=FALSE)
+confusionMatrix(decision.tree_pred,data.test$Target)
+```
+Model selection: with the result shown, the naivesBayes algorithm have the highest accuracy and prediction
